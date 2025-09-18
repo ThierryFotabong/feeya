@@ -7,7 +7,7 @@
   - [] Stub `cart`, `checkout/index`, `order/confirmation`, `order/track`
 - []Apply logo as app icon and favicon in `app.json`
 - [] Create theme tokens
-  - [] `theme/colors.ts` using `feeya_color_palette.md`
+  - [] `theme/colors.ts` using `color_palette.md`
   - [] `theme/typography.ts`
 - [] Adjust TypeScript config (`tsconfig.json` paths)
 - [] Install dependency set compatible with Expo SDK 51 and Router v3
