@@ -1,0 +1,200 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String
+  image       String?
+  size        String?  // e.g., "500g", "1L"
+  weight      Float?   // in kg
+  unit        String?  // e.g., "kg", "L", "piece"
+  price       Float    // in EUR
+  unitPrice   Float?   // price per unit (EUR/kg, EUR/L)
+  allergens   String[] // array of allergen strings
+  origin      String?
+  availability Boolean @default(true)
+  stock       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  basketItems BasketItem[]
+  orderItems  OrderItem[]
+
+  @@map("products")
+}
+
+model Customer {
+  id           String   @id @default(cuid())
+  name         String
+  phone        String   @unique
+  email        String?
+  consentFlags Json     @default("{}") // GDPR consent flags
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  addresses Address[]
+  orders    Order[]
+
+  @@map("customers")
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  customerId String
+  street     String
+  number     String
+  apartment  String?
+  postalCode String
+  city       String
+  country    String   @default("Belgium")
+  lat        Float?
+  lng        Float?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@map("addresses")
+}
+
+model Basket {
+  id        String   @id @default(cuid())
+  sessionId String?  // for guest users
+  customerId String?
+  subtotal  Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  items BasketItem[]
+
+  @@map("baskets")
+}
+
+model BasketItem {
+  id        String   @id @default(cuid())
+  basketId  String
+  productId String
+  quantity  Int
+  price     Float    // price at time of adding to basket
+  createdAt DateTime @default(now())
+
+  // Relations
+  basket  Basket  @relation(fields: [basketId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("basket_items")
+}
+
+model Order {
+  id                 String      @id @default(cuid())
+  orderNumber        String      @unique
+  customerId         String
+  addressId          String
+  basketId           String
+  status             OrderStatus @default(CONFIRMED)
+  subtotal           Float
+  deliveryFee        Float
+  discount           Float       @default(0)
+  total              Float
+  etaBand            String?     // e.g., "18:30-19:00"
+  substitutionAllowed Boolean    @default(false)
+  paymentIntentId    String?     // Stripe payment intent ID
+  paymentStatus      PaymentStatus @default(PENDING)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  // Relations
+  customer Customer     @relation(fields: [customerId], references: [id])
+  address  Address      @relation(fields: [addressId], references: [id])
+  items    OrderItem[]
+  events   OrderEvent[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float   // price at time of order
+  name      String  // product name at time of order
+  size      String? // product size at time of order
+
+  // Relations
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  event     String   // e.g., "confirmed", "preparing", "out_for_delivery", "delivered"
+  timestamp DateTime @default(now())
+  metadata  Json?    // additional event data
+
+  // Relations
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_events")
+}
+
+model DeliveryZone {
+  id          String  @id @default(cuid())
+  name        String
+  postalCodes String[] // array of postal codes
+  deliveryFee Float
+  freeDeliveryThreshold Float?
+  etaBands    Json     // time slots and availability
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("delivery_zones")
+}
+
+model Substitution {
+  id          String  @id @default(cuid())
+  productId   String
+  substituteId String
+  priority    Int     @default(1) // 1 = highest priority
+  priceRule   String  @default("REFUND_DELTA") // REFUND_DELTA, APPROVE_DELTA, NO_CHANGE
+  maxDelta    Float?  // maximum price difference allowed
+
+  @@map("substitutions")
+}
+
+enum OrderStatus {
+  CONFIRMED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}

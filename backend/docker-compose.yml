@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: feeya_postgres
+    environment:
+      POSTGRES_DB: feeya_db
+      POSTGRES_USER: feeya_user
+      POSTGRES_PASSWORD: feeya_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feeya_user -d feeya_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Meilisearch
+  meilisearch:
+    image: getmeili/meilisearch:v1.5
+    container_name: feeya_meilisearch
+    environment:
+      MEILI_MASTER_KEY: masterKey
+      MEILI_ENV: development
+    ports:
+      - "7700:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for session storage and caching)
+  redis:
+    image: redis:7-alpine
+    container_name: feeya_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: .
+    container_name: feeya_backend
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://feeya_user:feeya_password@postgres:5432/feeya_db
+      MEILISEARCH_HOST: http://meilisearch:7700
+      MEILISEARCH_API_KEY: masterKey
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  meilisearch_data:
+  redis_data:
